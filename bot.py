@@ -4,7 +4,7 @@ import os
 
 from aiogram import Bot, Dispatcher
 
-from handlers.wizard import router
+from handlers.wizard import router, sessions
 
 logging.basicConfig(level=logging.INFO)
 
@@ -17,6 +17,8 @@ async def main():
     bot = Bot(token)
     dp = Dispatcher()
     dp.include_router(router)
+
+    sessions.cleanup_expired_sessions()
 
     await dp.start_polling(bot)
 
