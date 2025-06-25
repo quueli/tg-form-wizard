@@ -62,15 +62,38 @@ async def pick_category(cb: CallbackQuery, state: FSMContext) -> None:
 async def pick_group(cb: CallbackQuery, state: FSMContext) -> None:
     group = cb.data.split(":", 1)[1]
     await _save(state, "group", group)
-    items = c.get_available_items("a", group)
+    await _save(state, "item_a_selected", {})
     await state.set_state(WizardStates.item_a)
-    await cb.message.edit_text("Pick an option:", reply_markup=kb.from_keys(items, q.ITEMS["a"], "item_a"))
+    items = {k: q.ITEMS["a"][k] for k in c.get_available_items("a", group)}
+    await cb.message.edit_text("Choose options (tap to include / exclude):",
+                               reply_markup=kb.multi_select(items, {}, "item_a"))
     await cb.answer()
 
 
 @router.callback_query(WizardStates.item_a, F.data.startswith("item_a:"))
-async def pick_item_a(cb: CallbackQuery, state: FSMContext) -> None:
-    await _save(state, "item_a", cb.data.split(":", 1)[1])
+async def toggle_item_a(cb: CallbackQuery, state: FSMContext) -> None:
+    key = cb.data.split(":", 1)[1]
+    data = await state.get_data()
+    selected = data.get("item_a_selected", {})
+    # unset -> include -> exclude -> unset
+    nxt = {None: "include", "include": "exclude", "exclude": None}[selected.get(key)]
+    if nxt is None:
+        selected.pop(key, None)
+    else:
+        selected[key] = nxt
+    await state.update_data(item_a_selected=selected)
+    group = (await _answers(state)).get("group")
+    items = {k: q.ITEMS["a"][k] for k in c.get_available_items("a", group)}
+    await cb.message.edit_reply_markup(reply_markup=kb.multi_select(items, selected, "item_a"))
+    await cb.answer()
+
+
+@router.callback_query(WizardStates.item_a, F.data == kb.NAV_DONE)
+async def finish_item_a(cb: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    selected = data.get("item_a_selected", {})
+    await _save(state, "item_a_include", [k for k, v in selected.items() if v == "include"])
+    await _save(state, "item_a_exclude", [k for k, v in selected.items() if v == "exclude"])
     await state.set_state(WizardStates.priority)
     await cb.message.edit_text("Priority:", reply_markup=kb.single_select(q.PRIORITIES, "priority"))
     await cb.answer()
@@ -108,6 +131,18 @@ async def pick_option_final(cb: CallbackQuery, state: FSMContext) -> None:
 
 @router.message(WizardStates.notes)
 async def take_notes(message: Message, state: FSMContext) -> None:
-    answers = await _save(state, "notes", message.text or "")
+    await _save(state, "notes", message.text or "")
+    await _finish(message, state)
+
+
+@router.message(WizardStates.notes, Command("skip"))
+async def skip_notes(message: Message, state: FSMContext) -> None:
+    await _finish(message, state)
+
+
+async def _finish(message: Message, state: FSMContext) -> None:
+    answers = await _answers(state)
+    from services.export import answers_to_row
+    row = answers_to_row(answers)
     await state.clear()
-    await message.answer("Saved. " + str(len(answers)) + " answers.")
+    await message.answer("Saved. " + str(len([c for c in row if c])) + " fields filled.")
