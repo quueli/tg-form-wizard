@@ -1,7 +1,4 @@
 # python -m examples.run_offline
-from __future__ import annotations
-
-import os
 import tempfile
 from pathlib import Path
 
@@ -30,7 +27,7 @@ def walk() -> dict:
     return answers
 
 
-def main() -> None:
+def main():
     answers = walk()
     print("answers:")
     for k, v in answers.items():
