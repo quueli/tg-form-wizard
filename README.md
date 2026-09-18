@@ -1,5 +1,7 @@
 # tg-form-wizard
 
+![ci](https://github.com/quueli/tg-form-wizard/actions/workflows/ci.yml/badge.svg)
+
 a telegram bot that walks a person through a long questionnaire (19 steps in the original) and puts the answers into a google sheet. the real questions are replaced with a dummy set in data/questionnaire.py, swap that module and the rest works as is.
 
     pip install -r requirements.txt
